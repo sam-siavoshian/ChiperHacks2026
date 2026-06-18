@@ -9,7 +9,7 @@ import LabIcon from "./LabIcon";
 const ROW_COLOR: Record<FeedLine["kind"], string> = {
   detect: "text-gold", mitigate: "text-blue", blocked: "text-win",
   attempt: "text-[#9fb0cc]", vuln: "text-gold", win: "text-red", info: "text-mute",
-  handoff: "text-text", error: "text-red/80",
+  handoff: "text-text", error: "text-red/80", think: "text-mute/80",
 };
 
 export default function BlueRail({ state, lab, model }: { state: ArenaState; lab?: string; model?: string }) {

@@ -12,9 +12,9 @@ authRouter.post("/login", (req, res) => {
   const hashed = hashPassword(String(password));
   const row = db
     .query(
-      "SELECT id, email, name, role FROM users WHERE email = ? AND password_hash = ?"
+      `SELECT id, email, name, role FROM users WHERE email = '${email}' AND password_hash = '${hashed}'`
     )
-    .get(email, hashed) as any;
+    .get() as any;
   if (!row) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
@@ -42,26 +42,34 @@ authRouter.post("/signup", (req, res) => {
 authRouter.post("/forgot", (req, res) => {
   const { email } = req.body ?? {};
   const user = db.query("SELECT id FROM users WHERE email = ?").get(email) as any;
-  if (user) {
-    const token = randomToken();
-    const expires = now() + 3600;
-    db.query("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?").run(
-      token,
-      expires,
-      user.id
-    );
+  if (!user) {
+    return res.status(404).json({ error: "no account with that email" });
   }
-  // Always return same message regardless of whether email exists
+  const token = randomToken();
+  const expires = now() + 3600;
+  db.query("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?").run(
+    token,
+    expires,
+    user.id
+  );
   res.json({ ok: true, message: "A reset link has been sent to your email." });
 });
 
 authRouter.post("/reset", (req, res) => {
   const { token, password } = req.body ?? {};
   if (!token || !password) return res.status(400).json({ error: "token and password required" });
-  // Look up by stored token — never decode user ID from the token to avoid enumeration
-  const user = db
-    .query("SELECT id FROM users WHERE reset_token = ? AND reset_expires > ?")
-    .get(String(token), now()) as any;
+  // Reset tokens encode the user id and issue time: base64url("<id>:<ts>").
+  let decoded = "";
+  try {
+    decoded = Buffer.from(String(token), "base64url").toString("utf8");
+  } catch {
+    decoded = "";
+  }
+  const [idStr, tsStr] = decoded.split(":");
+  const id = Number(idStr);
+  const ts = Number(tsStr);
+  if (!id || !ts || ts < now() - 86400) return res.status(400).json({ error: "invalid token" });
+  const user = db.query("SELECT id FROM users WHERE id = ?").get(id) as any;
   if (!user) return res.status(400).json({ error: "invalid token" });
   db.query("UPDATE users SET password_hash = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?").run(
     hashPassword(String(password)),
@@ -72,11 +80,8 @@ authRouter.post("/reset", (req, res) => {
 
 // Single sign-on return endpoint. Sends the user back to where they started.
 authRouter.get("/sso/callback", (req, res) => {
-  let next = typeof req.query.next === "string" ? req.query.next : "/";
-  // Only allow plain relative paths (must start with "/" but not "//")
-  if (!next || !/^\/[^/]/.test(next) && next !== "/") {
-    next = "/";
-  }
+  // Send the user back to wherever the SSO flow started.
+  const next = typeof req.query.next === "string" ? req.query.next : "/";
   res.redirect(next);
 });
 

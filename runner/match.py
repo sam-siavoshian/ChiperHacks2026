@@ -11,6 +11,7 @@ the tool-level narration; the runner emits the turn framing.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import httpx
@@ -18,6 +19,7 @@ import httpx
 from .clients import ControlPlane, McpControl, Tv, envelope
 from .config import Config
 from .session import AgentSession
+from .tap import StreamTap
 
 
 class MatchRunner:
@@ -29,6 +31,28 @@ class MatchRunner:
         self.tv = Tv(cfg.bus_emit, http)
         self.red = red
         self.blue = blue
+        self.hints = self._load_hints()
+        # One tap per side, lifting the agent's reasoning + native tool use off the
+        # live session stream onto the broadcast. Same bus sink as everything else.
+        self.red_tap = StreamTap("attacker", self.tv.emit)
+        self.blue_tap = StreamTap("defender", self.tv.emit)
+
+    def _load_hints(self) -> dict[str, dict[str, Any]]:
+        """RED's strike list keyed by vuln id, so each turn we can point the
+        attacker straight at the next open real target by name."""
+        path = self.cfg.repo / "arena" / "contract" / "target-hints.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return {t["id"]: t for t in data.get("targets", []) if t.get("id")}
+        except Exception:
+            return {}
+
+    def _next_target(self, st: dict[str, Any]) -> dict[str, Any] | None:
+        """First open, real (non-decoy) vuln on the board that we have a hint for."""
+        for c in st.get("cells", []):
+            if c.get("status") == "open" and not c.get("isDecoy") and c.get("id") in self.hints:
+                return self.hints[c["id"]]
+        return None
 
     async def run(self) -> dict[str, Any]:
         await self.cp.start_match(int(self.cfg.match_seconds * 1000))
@@ -58,15 +82,18 @@ class MatchRunner:
         await self.tv.emit(envelope("caster", "commentary",
                                     {"text": "Both sides warming up — Red maps the target, Blue studies the code.",
                                      "intensity": "normal", "trigger": "warmup"}))
-        red_p = ("The match starts in seconds. Call init_attacker NOW, then immediately run "
-                 "list_endpoints and list_inputs to map the target and line up your first two or three "
-                 "shots. Do NOT attack or explain yet — just recon and pick targets. Be terse. Stop as "
+        red_p = ("The match starts in seconds. Call init_attacker NOW and read your SCOUT REPORT — "
+                 "the confirmed targets are handed to you (class, endpoint, injection point), no recon "
+                 "needed. Line up your first target. Do NOT attack or explain yet. Be terse. Stop as "
                  "soon as you have a plan.")
         blue_p = ("The match starts in seconds. Call init_defender NOW, then skim the source under "
                   "arena/app/server/routes so you know the layout. Do NOT patch yet. Be terse. Stop "
                   "once you are oriented.")
         dl = self.cfg.warmup_seconds + 6
-        await asyncio.gather(self.red.take_turn(red_p, dl), self.blue.take_turn(blue_p, dl))
+        self.red_tap.round_ = 0
+        self.blue_tap.round_ = 0
+        await asyncio.gather(self.red.take_turn(red_p, dl, on_line=self.red_tap.feed),
+                             self.blue.take_turn(blue_p, dl, on_line=self.blue_tap.feed))
 
     async def _over(self) -> bool:
         return bool((await self.cp.state()).get("over"))
@@ -84,10 +111,13 @@ class MatchRunner:
         await self.tv.emit(envelope("orchestrator", "handoff",
                                     {"from": "orchestrator", "to": "recon" if side == "red" else "blue"}, round_=rnd))
 
+        tap = self.red_tap if side == "red" else self.blue_tap
+        tap.round_ = rnd
         ticker = asyncio.create_task(self._tick(rnd))
         try:
             await sess.take_turn(self._prompt(side, rnd, st),
-                                 self.cfg.turn_seconds + self.cfg.turn_grace_seconds)
+                                 self.cfg.turn_seconds + self.cfg.turn_grace_seconds,
+                                 on_line=tap.feed)
         finally:
             ticker.cancel()
         # The orchestrator owns the score (it emits the scoring events); the runner
@@ -106,14 +136,22 @@ class MatchRunner:
 
     def _prompt(self, side: str, rnd: int, st: dict[str, Any]) -> str:
         if side == "red":
+            tgt = self._next_target(st)
+            if tgt:
+                return (f"GO — Round {rnd}, on the clock. YOUR TARGET: {tgt['class']} on "
+                        f"{tgt['method']} {tgt['endpoint']} — {tgt['input']}. Fire ONE http_request to "
+                        f"exploit it (it returns the response SYNCHRONOUSLY; read it), then call "
+                        f"claim_exploit with class '{tgt['class']}' and the exact path you hit as evidence. "
+                        f"No recon, no polling, no preamble. http_request then claim_exploit, then stop "
+                        f"at turn_over.")
+            # Fallback: no strike list / nothing mapped — let RED pick from its scout report.
             saved = sorted({c["area"] for c in st.get("cells", []) if c.get("status") == "blue_saved"})
             blocked = f"Blue already secured: {', '.join(saved)} — skip those. " if saved else ""
-            return (f"GO — Round {rnd}, on the clock. You already mapped the target in warmup. {blocked}"
-                    f"Send ONE exploit now with http_request — for example a SQL injection in the "
-                    f"/api/auth/login body, an IDOR on /api/tasks/:id, or path traversal on "
-                    f"/api/files/download. http_request returns the response SYNCHRONOUSLY; read it, "
-                    f"then call claim_exploit with that response as evidence. Do NOT poll or background "
-                    f"anything. Just: http_request then claim_exploit. Then stop at turn_over.")
+            return (f"GO — Round {rnd}, on the clock. {blocked}Pick the next open target from your scout "
+                    f"report and send ONE exploit now with http_request. It returns the response "
+                    f"SYNCHRONOUSLY; read it, then call claim_exploit with that response as evidence. Do "
+                    f"NOT poll or background anything. Just: http_request then claim_exploit. Then stop "
+                    f"at turn_over.")
         return (f"GO — Round {rnd}, on the clock. RED just attacked. Call get_intel, open the source for that "
                 f"area, fix the flaw (keep the feature working), and call submit_patch. Tools immediately — "
                 f"no preamble. One precise patch, then stop at turn_over.")

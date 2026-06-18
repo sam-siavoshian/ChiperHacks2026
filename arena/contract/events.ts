@@ -24,6 +24,7 @@ export type EventType =
   | "handoff"
   | "asset.discovered"
   | "attempting"
+  | "agent.thinking"
   | "vuln_found"
   | "exploit_success"
   | "blue.detect"

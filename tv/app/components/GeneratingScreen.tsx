@@ -72,10 +72,6 @@ export default function GeneratingScreen({ cfg, startedAt, onReady }: { cfg: Mat
             );
           })}
         </div>
-
-        <div className="mt-9 text-[12px] text-mute">
-          Broadcast runs ~15s behind live for synced commentary
-        </div>
       </div>
     </main>
   );

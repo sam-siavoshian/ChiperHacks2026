@@ -1,7 +1,11 @@
-// Generates two artifacts from a single source of truth (probes.ts + the
-// augmentation map below):
+// Generates three artifacts from a single source of truth (probes.ts + the
+// augmentation maps below):
 //   judge/answer-sheet.json        -> PRIVATE. Judge-only. Fix + patch criteria.
 //   contract/vuln-manifest.json    -> PUBLIC. Drives the viz. No exploit recipes.
+//   contract/target-hints.json     -> RED's strike list. Real vulns only (no
+//                                     decoys): class + endpoint + injection point,
+//                                     so the attacker can strike fast without recon.
+//                                     No payloads, no fixes.
 // Run: bun run judge/build-sheets.ts
 
 import { writeFileSync } from "fs";
@@ -100,6 +104,39 @@ const AUG: Record<string, Aug> = {
   "decoy-template-eval": { fix_summary: "(decoy — eval path unreachable; safe replace used)", patch_criteria: "N/A (not exploitable)." },
 };
 
+// RED's strike list. For each REAL vuln (decoys excluded): the bug class, the
+// endpoint to hit, and which input to inject. This is "endpoints + class" — the
+// attacker still crafts the payload itself; no exploit recipe is handed over.
+interface Hint {
+  cls: string;
+  method: string;
+  endpoint: string;
+  input: string;
+}
+
+const HINTS: Record<string, Hint> = {
+  "sqli-login": { cls: "sqli", method: "POST", endpoint: "/api/auth/login", input: "email field (body) is concatenated into SQL" },
+  "jwt-weak-secret": { cls: "weak-jwt", method: "*", endpoint: "/api/* (any authed route)", input: "session JWT is signed with a weak/default secret — steal it, forge a token" },
+  "predictable-reset-token": { cls: "predictable-token", method: "POST", endpoint: "/api/auth/reset", input: "token field (body) is guessable, not random" },
+  "user-enumeration": { cls: "user-enumeration", method: "POST", endpoint: "/api/auth/forgot", input: "email field — response differs for known vs unknown users" },
+  "mass-assignment-role": { cls: "mass-assignment", method: "PATCH", endpoint: "/api/users/me", input: "inject an extra 'role' field in the body to self-escalate" },
+  "idor-task": { cls: "idor", method: "GET", endpoint: "/api/tasks/:id", input: "id path param — read a task from another workspace" },
+  "idor-file": { cls: "idor", method: "GET", endpoint: "/api/files/:id", input: "id path param — read another workspace's file metadata" },
+  "missing-admin-authz": { cls: "broken-access-control", method: "GET", endpoint: "/api/admin/users", input: "call it as a non-admin (no admin check)" },
+  "broken-role-check": { cls: "broken-access-control", method: "POST", endpoint: "/api/workspaces/:wsId/members/:userId/role", input: "role body — assign a role above your own" },
+  "stored-xss": { cls: "stored-xss", method: "GET", endpoint: "/api/tasks/:id/export.html", input: "a comment body (POST /api/tasks/:id/comments) is rendered raw in the export" },
+  "sqli-search": { cls: "sqli", method: "GET", endpoint: "/api/search", input: "q query param — UNION injection" },
+  "sqli-reports": { cls: "sqli", method: "GET", endpoint: "/api/reports/tasks", input: "status query param — UNION injection leaks other tables" },
+  "ssrf-integration": { cls: "ssrf", method: "POST", endpoint: "/api/integrations/:wsId/test", input: "url body — point it at an internal host" },
+  "ssrf-avatar": { cls: "ssrf", method: "POST", endpoint: "/api/users/me/avatar", input: "url body — server fetches any URL" },
+  "path-traversal": { cls: "path-traversal", method: "GET", endpoint: "/api/files/download", input: "path query param — ../ escapes the upload dir" },
+  "unrestricted-upload": { cls: "unrestricted-upload", method: "POST", endpoint: "/api/files then GET /api/files/:id/raw", input: "upload HTML/script — it is served inline" },
+  "price-tampering": { cls: "price-tampering", method: "POST", endpoint: "/api/billing/:wsId/upgrade", input: "priceCents / seats body are trusted from the client" },
+  "coupon-race": { cls: "race-condition", method: "POST", endpoint: "/api/billing/:wsId/redeem", input: "code body — fire concurrently (race_probe) to redeem past the limit" },
+  "secrets-exposure": { cls: "secrets-exposure", method: "GET", endpoint: "/api/config", input: "hidden diagnostics route returns the jwtSecret" },
+  "open-redirect": { cls: "open-redirect", method: "GET", endpoint: "/api/auth/sso/callback", input: "next query param accepts an absolute external URL" },
+};
+
 // Deterministic board layout: place nodes on a grid for the viz.
 function coords(i: number, total: number) {
   const cols = 5;
@@ -135,6 +172,32 @@ const manifest = {
   })),
 };
 
+// RED's strike list: real vulns only (decoys are NOT handed over), in board order.
+const targetHints = {
+  generatedFrom: "judge/probes.ts",
+  app: "Tasklight",
+  note: "Confirmed real vulnerabilities. Class + endpoint + injection point only — no payloads. Decoys are excluded.",
+  targets: PROBES.filter((p) => !p.isDecoy).map((p) => {
+    const h = HINTS[p.id];
+    if (!h) throw new Error(`build-sheets: missing strike-list HINT for real vuln ${p.id}`);
+    return {
+      id: p.id,
+      title: p.title,
+      area: p.area,
+      owasp: p.owasp,
+      difficulty: p.difficulty,
+      class: h.cls,
+      method: h.method,
+      endpoint: h.endpoint,
+      input: h.input,
+    };
+  }),
+};
+
 writeFileSync(resolve(import.meta.dir, "answer-sheet.json"), JSON.stringify(answerSheet, null, 2));
 writeFileSync(resolve(import.meta.dir, "../contract/vuln-manifest.json"), JSON.stringify(manifest, null, 2));
-console.log(`wrote answer-sheet.json (${answerSheet.length}) and vuln-manifest.json (${manifest.nodes.length})`);
+writeFileSync(resolve(import.meta.dir, "../contract/target-hints.json"), JSON.stringify(targetHints, null, 2));
+console.log(
+  `wrote answer-sheet.json (${answerSheet.length}), vuln-manifest.json (${manifest.nodes.length}), ` +
+    `target-hints.json (${targetHints.targets.length} real targets)`,
+);

@@ -76,6 +76,33 @@ def test_describe():
     check("MCP attempting carries note+area to the LLM", "material difference" in probe[0] and "search / SQL" in probe[0])
     check("MCP attempting tags the tool", probe[2] == "diff_probe")
     check("MCP hit outcome lifts intensity", probe[1] == "normal")
+    # the agent's mind (runner session tap -> agent.thinking)
+    mind = describe({"type": "agent.thinking", "agent": "web_exploit",
+                     "payload": {"agent": "web_exploit", "text": "The search filter looks injectable.", "kind": "reason"}})
+    check("thinking is fed as RED's mind", "RED is thinking" in mind[0] and "injectable" in mind[0])
+    check("thinking is low energy, not a goal", mind[1] == "calm" and mind[3] is False)
+    blue_mind = describe({"type": "agent.thinking", "agent": "blue",
+                          "payload": {"agent": "blue", "text": "Swap to a parameterized query.", "kind": "reason"}})
+    check("blue thinking attributed to BLUE", "BLUE is thinking" in blue_mind[0])
+    blank = describe({"type": "agent.thinking", "agent": "blue", "payload": {"agent": "blue", "text": "  "}})
+    check("blank thinking ignored", blank[0] is None)
+    # enriched attempting carries the REAL payload + leaked response into the line
+    rich = describe({"type": "attempting", "agent": "web_exploit", "payload": {
+        "agent": "web_exploit", "tool": "http_request", "area": "search / SQL", "phase": "result",
+        "note": "got 200 (812b)", "detail": {"status": 200, "bodySnippet": "admin@tasklight.io leaked",
+                                              "payload": "q=' UNION SELECT email FROM users -- "}}})
+    check("attempting surfaces the real payload", "UNION SELECT email" in rich[0])
+    check("attempting surfaces the leaked response", "admin@tasklight.io leaked" in rich[0])
+    check("leaked response lifts intensity", rich[1] == "normal")
+    intent = describe({"type": "attempting", "agent": "web_exploit", "payload": {
+        "agent": "web_exploit", "tool": "http_request", "area": "search / SQL", "phase": "intent",
+        "note": "firing GET at /api/search", "detail": {"payload": "q=' UNION SELECT ..."}}})
+    check("intent beat reads as lining up", "lining up" in intent[0])
+    # BLUE's native source surgery (tap -> attempting with a file)
+    surgery = describe({"type": "attempting", "agent": "blue", "payload": {
+        "agent": "blue", "tool": "Edit", "phase": "intent", "note": "editing auth.ts",
+        "detail": {"file": "auth.ts", "payload": "db.query(sql).get(email)"}}})
+    check("blue surgery names the file", "auth.ts" in surgery[0] and "BLUE" in surgery[0])
 
 
 def test_ingest_state():

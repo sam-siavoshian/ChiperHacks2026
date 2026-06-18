@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useBroadcast } from "@/lib/useBroadcast";
-import { useVulns } from "@/lib/useVulns";
+import { useVulns, mergeLiveStatus } from "@/lib/useVulns";
 import { MatchConfig } from "@/lib/matchConfig";
 import { modelName } from "@/lib/models";
 import BroadcastBar from "./BroadcastBar";
@@ -18,7 +18,10 @@ import CrowdController from "./CrowdController";
 export default function Broadcast({ cfg }: { cfg: MatchConfig }) {
   const { state, now, status } = useBroadcast();
   const [boardOpen, setBoardOpen] = useState(false);
-  const vulns = useVulns(boardOpen);
+  // Catalog from the poll; live per-vuln verdicts overlaid from the event stream so
+  // the dossier counts update the instant a goal/save lands (no poll lag).
+  const polled = useVulns(boardOpen);
+  const vulns = mergeLiveStatus(polled, state.vulnStatus, { red: state.redScore, blue: state.blueScore });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

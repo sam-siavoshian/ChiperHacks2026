@@ -171,9 +171,9 @@ function CenterColumn({ rounds, onRounds, mirror }: { rounds: number; onRounds: 
       <div className="flex flex-col items-center gap-2.5">
         <Label help="How many rounds the match runs. Each round is a fresh attempt on a clean copy of the target.">Format</Label>
         <div className="flex gap-1.5 p-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          {[1, 3, 5].map((r) => (
+          {[10, 25, 50].map((r) => (
             <button key={r} onClick={() => onRounds(r)}
-              className="w-10 h-9 rounded-full font-display font-bold text-[16px] transition-all"
+              className="w-12 h-9 rounded-full font-display font-bold text-[16px] transition-all"
               style={rounds === r
                 ? { background: "#b8ff3b", color: "#0a1206" }
                 : { color: "#8a97b4" }}>

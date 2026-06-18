@@ -4,7 +4,7 @@
 
 import type {
   AnyEvent, AgentId, AssetKind, BlueAction,
-  RoundStartP, RoundEndP, HandoffP, AssetDiscoveredP, AttemptingP, VulnFoundP,
+  RoundStartP, RoundEndP, HandoffP, AssetDiscoveredP, AttemptingP, ThinkingP, VulnFoundP,
   ExploitSuccessP, BlueDetectP, BlueMitigateP, BlueBlockedP, ScoreUpdateP, TimerP,
   ExfilChunkP, CommentaryP, ErrorP, Winner,
 } from "./events";
@@ -19,7 +19,7 @@ export interface GLink { source: string; target: string; active: boolean; }
 
 export interface FeedLine {
   id: string; ts: number; agent: AgentId;
-  kind: "attempt" | "vuln" | "win" | "detect" | "mitigate" | "blocked" | "error" | "info" | "handoff";
+  kind: "attempt" | "vuln" | "win" | "detect" | "mitigate" | "blocked" | "error" | "info" | "handoff" | "think";
   text: string; sub?: string; sev?: string; n?: number;
 }
 
@@ -59,6 +59,14 @@ export interface DefenderView {
 }
 export interface TickerItem { id: string; tone: "red" | "blue" | "amber" | "win"; text: string; }
 
+// Live per-turn tool-call budget for one side — drives the "tools left this turn"
+// HUD. `tool` is the latest tool that side called; the counts are the most recent
+// budget snapshot carried on an `attempting` event (native tapped calls update the
+// tool name but leave the counts as last seen).
+export interface BudgetHUD {
+  tool: string; budget: number; used: number; remaining: number; at: number;
+}
+
 export interface ArenaState {
   phase: Phase;
   round: number; roundTitle: string; vulnClass: string;
@@ -75,6 +83,12 @@ export interface ArenaState {
   caster: CasterLine | null;
   attacker: AttackerView | null;
   defender: DefenderView | null;
+  redBudget: BudgetHUD | null;  // RED's live tool-call budget this turn
+  blueBudget: BudgetHUD | null; // BLUE's live tool-call budget this turn
+  // Live per-vuln verdict, keyed by vuln id, driven straight off the event stream
+  // (exploit_success -> red_scored, blue.mitigate -> blue_saved). Lets the dossier
+  // counts move the instant a goal/save lands, with no control-plane HTTP poll.
+  vulnStatus: Record<string, "red_scored" | "blue_saved">;
   breach: BreachBeat | null;
   proof: BlockedProof | null;
   ticker: TickerItem[];
@@ -112,6 +126,9 @@ export function initialState(): ArenaState {
     caster: null,
     attacker: null,
     defender: null,
+    redBudget: null,
+    blueBudget: null,
+    vulnStatus: {},
     breach: null,
     proof: null,
     ticker: [],
@@ -170,6 +187,7 @@ export function reduce(s: ArenaState, ev: AnyEvent, now: number): ArenaState {
       n.health = 100; n.assetsOwned = 0;
       n.attacker = null;
       n.defender = null;
+      n.redBudget = null; n.blueBudget = null; // fresh per-turn budget each round
       n.roundAt = now;
       n.ticker = cap(n.ticker, { id: ev.id, tone: "amber", text: `ROUND ${rp.round} — ${rp.title.toUpperCase()}` }, 24);
       break;
@@ -204,11 +222,47 @@ export function reduce(s: ArenaState, ev: AnyEvent, now: number): ArenaState {
     }
     case "attempting": {
       const at = p as AttemptingP;
+      const d = at.detail || {};
+      // a richer console sub-line: the actual payload / what came back, when we have it
+      const sub = d.payload
+        ? `${at.note}  ⟶  ${d.payload}`
+        : d.status != null
+          ? `${at.note}  ·  ${d.status}${d.bodyLen != null ? ` (${d.bodyLen}b)` : ""}${d.blocked ? " · BLOCKED" : ""}`
+          : at.note;
       n.agentLast = { ...n.agentLast, [at.agent]: `${at.tool} ${at.target}` };
-      if (at.agent !== "blue") {
-        n.attacker = { agent: at.agent, tool: at.tool, path: at.target || "", note: at.note || "", status: null, evidence: null, phase: "probing", at: now };
+      // live per-turn tool-call budget HUD: always refresh the latest tool name;
+      // carry the counts forward when this event lacks a budget snapshot (e.g.
+      // BLUE's native tapped Read/Edit, which do not charge the MCP budget).
+      if (at.tool) {
+        const side = at.agent === "blue" ? "blueBudget" : "redBudget";
+        const prev = n[side];
+        const hasB = typeof d.remaining === "number" && typeof d.budget === "number";
+        n[side] = {
+          tool: at.tool,
+          budget: hasB ? (d.budget as number) : (prev?.budget ?? 0),
+          used: typeof d.used === "number" ? d.used : (prev?.used ?? 0),
+          remaining: hasB ? (d.remaining as number) : (prev?.remaining ?? 0),
+          at: now,
+        };
       }
-      n.feedRed = pushFeed(n.feedRed, { id: ev.id, ts: ev.ts, agent: at.agent, kind: "attempt", text: `$ ${at.tool}`, sub: at.note });
+      if (at.agent === "blue") {
+        // BLUE's native source surgery (Read/Edit/...) surfaced by the session tap
+        n.feedBlue = pushFeed(n.feedBlue, { id: ev.id, ts: ev.ts, agent: "blue", kind: "attempt", text: `$ ${at.tool}${d.file ? ` ${d.file}` : ""}`, sub });
+      } else {
+        n.attacker = {
+          agent: at.agent, tool: at.tool, path: at.target || "", note: at.note || "",
+          status: d.status ?? null, evidence: d.bodySnippet ?? null,
+          phase: d.blocked ? "blocked" : "probing", at: now,
+        };
+        n.feedRed = pushFeed(n.feedRed, { id: ev.id, ts: ev.ts, agent: at.agent, kind: "attempt", text: `$ ${at.tool}`, sub });
+      }
+      break;
+    }
+    case "agent.thinking": {
+      const tp = p as ThinkingP;
+      const line: FeedLine = { id: ev.id, ts: ev.ts, agent: tp.agent, kind: "think", text: `🧠 ${tp.text}` };
+      if (tp.agent === "blue") n.feedBlue = pushFeed(n.feedBlue, line);
+      else n.feedRed = pushFeed(n.feedRed, line);
       break;
     }
     case "vuln_found": {
@@ -230,6 +284,11 @@ export function reduce(s: ArenaState, ev: AnyEvent, now: number): ArenaState {
       n.attacker = { agent: ev.agent, tool: n.attacker?.tool || "exploit", path: xp.url || n.attacker?.path || "", note: n.attacker?.note || xp.trophy, status: 200, evidence: xp.evidence || null, phase: "breached", at: now };
       n.feedRed = pushFeed(n.feedRed, { id: ev.id, ts: ev.ts, agent: ev.agent, kind: "win", text: `★ BREACH ${xp.class}`, sub: xp.evidence });
       n.ticker = cap(n.ticker, { id: ev.id, tone: "red", text: `RED SCORES +3 — ${xp.trophy.toUpperCase()}` }, 24);
+      // mark the real vuln (the event target / assetId is the vuln id) red_scored
+      {
+        const vid = (typeof ev.target === "string" && ev.target) || xp.assetId;
+        if (vid && vid !== "target") n.vulnStatus = { ...s.vulnStatus, [vid]: "red_scored" };
+      }
       break;
     }
     case "blue.detect": {
@@ -247,6 +306,13 @@ export function reduce(s: ArenaState, ev: AnyEvent, now: number): ArenaState {
       n.defender = { phase: "patched", action: bp.action, target: bp.assetId, threat: n.defender?.threat ?? null, label: bp.label, rule: bp.rule ?? null, status: null, at: now };
       n.feedBlue = pushFeed(n.feedBlue, { id: ev.id, ts: ev.ts, agent: "blue", kind: "mitigate", text: `⛨ DEPLOY ${bp.action}`, sub: bp.label });
       n.ticker = cap(n.ticker, { id: ev.id, tone: "blue", text: `BLUE PATCHES +5 — ${bp.action.toUpperCase()}` }, 24);
+      // mark the real vuln blue_saved (unless RED already scored it earlier)
+      {
+        const vid = (typeof ev.target === "string" && ev.target) || bp.assetId;
+        if (vid && vid !== "target" && s.vulnStatus[vid] !== "red_scored") {
+          n.vulnStatus = { ...s.vulnStatus, [vid]: "blue_saved" };
+        }
+      }
       break;
     }
     case "blue.blocked": {

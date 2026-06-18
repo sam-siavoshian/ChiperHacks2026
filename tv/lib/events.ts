@@ -24,6 +24,7 @@ export type EventType =
   | "handoff"
   | "asset.discovered"
   | "attempting"
+  | "agent.thinking"
   | "vuln_found"
   | "exploit_success"
   | "blue.detect"
@@ -53,7 +54,35 @@ export interface AssetDiscoveredP {
   id: string; label: string; kind: AssetKind;
   parentId: string | null; method: string | null; params: string[];
 }
-export interface AttemptingP { agent: AgentId; tool: string; target: string; note: string; }
+// A move on the wire. `note` is the human one-liner; `detail` carries the real
+// substance (the payload sent, what came back, what changed) so the caster can
+// explain the actual hack, not a canned phrase. `phase` separates the intent line
+// (before the call) from the result line (after) for the two-beat narration.
+export interface AttemptingDetail {
+  payload?: string;        // the actual attack input (SQLi string, forged claims, injected fields)
+  method?: string;
+  status?: number;         // response status
+  bodyLen?: number;
+  bodySnippet?: string;    // truncated response body — what actually leaked
+  changedField?: string;   // the field that moved (mass-assignment / boolean diff)
+  blocked?: boolean;       // BLUE's rule stopped it
+  ms?: number;             // tool wall time
+  // defender-side: the patch verdict substance
+  vuln?: string; valid?: boolean; exploitStillWorks?: boolean; featureBroken?: boolean;
+  file?: string; lines?: number;  // native file ops (BLUE's source surgery, via the session tap)
+  // per-turn tool-call budget snapshot (drives the live "tools left this turn" HUD)
+  budget?: number;     // max tool calls allowed this turn
+  used?: number;       // spent so far this turn
+  remaining?: number;  // calls left this turn
+}
+export interface AttemptingP {
+  agent: AgentId; tool: string; target: string; note: string;
+  phase?: "intent" | "result"; detail?: AttemptingDetail;
+}
+// The agent's own mind on the wire: its reasoning prose / plan, lifted from the
+// live session stream (the runner's stream-json). Not a tool call — what it is
+// THINKING. `kind` is reasoning vs a stated plan; `text` is already truncated.
+export interface ThinkingP { agent: AgentId; text: string; kind: "reason" | "plan"; }
 export interface VulnFoundP { class: string; severity: Severity; url: string; }
 export interface ExploitSuccessP {
   class: string; url: string; evidence: string; loot_ref: string | null; trophy: string; assetId?: string;
@@ -88,6 +117,7 @@ export type AnyEvent =
   | Envelope<HandoffP>
   | Envelope<AssetDiscoveredP>
   | Envelope<AttemptingP>
+  | Envelope<ThinkingP>
   | Envelope<VulnFoundP>
   | Envelope<ExploitSuccessP>
   | Envelope<BlueDetectP>

@@ -101,7 +101,8 @@ scoreboard, attack graph, agent feeds, and cinematic overlays all animate for fr
 | `round_end` | `{ round, summary, duration_ms, winner }` | round result card; final scoreboard on round 3 |
 | `handoff` | `{ from, to }` | lights up the active Red agent in the left rail |
 | `asset.discovered` | `{ id, label, kind, parentId, method, params[] }` | adds a node+edge to the attack graph |
-| `attempting` | `{ agent, tool, target, note }` | a dim "running" line in the Red console |
+| `attempting` | `{ agent, tool, target, note, phase?, detail? }` | a "running" line in the Red console (Blue's native file ops go to the Blue console). `phase` is `"intent"` (before the call) or `"result"` (after). `detail` carries the real substance: `{ payload, status, bodyLen, bodySnippet, changedField, blocked, ms, file, vuln, valid, ... }` — the actual attack input and what came back, so the caster can quote the hack |
+| `agent.thinking` | `{ agent, text, kind }` | the agent's OWN reasoning, lifted live off its session stream by the runner tap — a dim 🧠 line on that side's console, and context the caster voices in lulls. `kind` is `"reason"` or `"plan"` |
 | `vuln_found` | `{ class, severity, url }` | amber line + WIRE ticker hit |
 | `exploit_success` | `{ class, url, evidence, loot_ref, trophy, assetId }` | **breach beat** (ROOT ACCESS slam), +3 Red, node turns red |
 | `blue.detect` | `{ threat, assetId, confidence }` | pulses the node amber; Blue console line |

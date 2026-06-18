@@ -9,8 +9,8 @@ import type { AnyEvent, EventType, AgentId } from "./events";
 
 const EVENT_TYPES: ReadonlySet<string> = new Set([
   "round_start", "round_end", "handoff", "asset.discovered", "attempting",
-  "vuln_found", "exploit_success", "blue.detect", "blue.mitigate", "blue.blocked",
-  "score.update", "timer", "exfil.chunk", "commentary", "error",
+  "agent.thinking", "vuln_found", "exploit_success", "blue.detect", "blue.mitigate",
+  "blue.blocked", "score.update", "timer", "exfil.chunk", "commentary", "error",
 ]);
 
 const AGENT_IDS: ReadonlySet<string> = new Set([

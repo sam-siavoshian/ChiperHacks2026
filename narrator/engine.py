@@ -52,18 +52,47 @@ def describe(env):
         return (f"RED sniffs out a {p.get('severity')} {p.get('class')} weakness at {p.get('url')}.", "normal", "vuln", False)
     if t == "blue.detect":
         return (f"BLUE detects pressure on {p.get('threat')}.", "normal", "detect", False)
+    if t == "agent.thinking":
+        # The agent's own mind, lifted off its live session stream by the runner tap.
+        # This is what it is REASONING — the plan, the read of the game. Low energy,
+        # never a "goal"; it gives the caster something real to explain in the lulls.
+        ag = p.get("agent") or env.get("agent") or ""
+        side = "BLUE" if ag == "blue" else "RED"
+        text = str(p.get("text") or "").strip()
+        if not text:
+            return (None, "normal", "beat", False)
+        return (f"{side} is thinking: {text}", "calm", "mind", False)
     if t == "attempting":
-        # Both MCPs self-report a human intent line BEFORE each tool call and an
-        # outcome line AFTER (attacker/tools.py + defender/tools.py auto_report).
-        # `note` carries that line; `agent`/`tool`/`area` let the LLM explain it.
+        # Both MCPs self-report an intent line BEFORE each tool call and a result line
+        # AFTER (attacker/tools.py + defender/tools.py auto_report); the runner tap also
+        # reports BLUE's native file surgery here. `note` is the one-liner; `detail`
+        # carries the REAL substance — the payload sent, what leaked, what changed — so
+        # the caster quotes the actual hack. `phase` drives the intent->payoff two-beat.
         ag = p.get("agent") or env.get("agent") or ""
         side = "BLUE" if ag == "blue" else "RED"
         note = p.get("note") or p.get("target") or "working the target"
         area = p.get("area") or "recon"
         tool = p.get("tool") or "probe"
-        # outcome lines that signal a hit deserve a little more energy
-        hit = any(k in note.lower() for k in ("injectable", "fired", "goal", "blocked", "idor", "executed", "captured", "mass-assignment", "patched", "mitigated"))
-        return (f"{side} [{area}] {note}.", "normal" if hit else "calm", tool, False)
+        phase = p.get("phase")
+        d = p.get("detail") or {}
+        extra = ""
+        if d.get("payload"):
+            extra += f" [payload: {d['payload']}]"
+        if d.get("changedField"):
+            extra += f" [changed: {d['changedField']}]"
+        if d.get("bodySnippet"):
+            extra += f" [response: {d['bodySnippet']}]"
+        if d.get("file"):
+            extra += f" [file: {d['file']}]"
+        if d.get("status") is not None:
+            extra += f" [HTTP {d['status']}]"
+        lead = f"{side} is lining up" if phase == "intent" else f"{side}"
+        # outcome lines / detail that signal a hit deserve a little more energy
+        signal = (note + " " + extra).lower()
+        hit = any(k in signal for k in ("injectable", "fired", "goal", "blocked", "idor",
+                                        "executed", "captured", "mass-assignment", "patched",
+                                        "mitigated", "leaked", "dumped", "session '"))
+        return (f"{lead} [{area}] {note}.{extra}", "normal" if hit else "calm", tool, False)
     if t == "handoff":
         return (f"RED switches it up: {p.get('from')} to {p.get('to')}.", "calm", "handoff", False)
     if t == "exfil.chunk":
@@ -123,7 +152,7 @@ class CommentaryEngine:
     # so the narrator talks no matter which producer is wired (orchestrator,
     # attacker MCP, or both). round_end is the only thing that puts it to sleep.
     _ACTIVITY = {
-        "attempting", "vuln_found", "exploit_success", "blue.detect",
+        "attempting", "agent.thinking", "vuln_found", "exploit_success", "blue.detect",
         "blue.mitigate", "blue.blocked", "asset.discovered", "handoff",
         "exfil.chunk", "score.update", "commentary", "timer",
     }

@@ -171,3 +171,71 @@ body {
 .crt::after, .crt::before, .grain::before { content: none !important; }
 .clip-notch, .clip-tab { clip-path: none !important; }
 .phos, .phos-red, .phos-blue, .phos-win { text-shadow: none; }
+
+/* ===========================================================================
+   LIVE CONSOLE MOTION — the broadcast must never look frozen between events.
+   Every animation below is compositor-only (transform / opacity / bg-position),
+   so the radar, packets, scan bars and meters run on the GPU without churning
+   React. Driven purely by CSS so they keep moving even when no event fires.
+   =========================================================================== */
+
+/* radar dish sweep over the targeted endpoint */
+@keyframes radar-sweep { to { transform: rotate(360deg); } }
+.radar-sweep {
+  background: conic-gradient(from 0deg, transparent 0deg, transparent 300deg, rgba(255, 59, 80, 0.28) 352deg, rgba(255, 59, 80, 0.5) 360deg);
+  border-radius: 50%;
+  animation: radar-sweep 2.4s linear infinite;
+}
+.radar-sweep.blue { background: conic-gradient(from 0deg, transparent 0deg, transparent 300deg, rgba(46, 144, 255, 0.28) 352deg, rgba(46, 144, 255, 0.5) 360deg); }
+
+/* expanding ping ring (target lock pulse) */
+@keyframes ping-ring { 0% { transform: scale(0.5); opacity: 0.65; } 80%, 100% { transform: scale(2.6); opacity: 0; } }
+.ping-ring { animation: ping-ring 1.8s ease-out infinite; }
+
+/* a packet shooting from the attacker chip toward the endpoint */
+@keyframes packet-fly {
+  0% { transform: translateX(0) scale(0.6); opacity: 0; }
+  10% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateX(var(--fly, 200px)) scale(1); opacity: 0; }
+}
+.packet-fly { animation: packet-fly var(--dur, 1.4s) cubic-bezier(0.4, 0, 0.7, 1) infinite; animation-delay: var(--delay, 0s); }
+
+/* a scan bar drifting down the live preview — the "we are watching" tell */
+@keyframes scan-down { 0% { transform: translateY(-120%); } 100% { transform: translateY(820%); } }
+.scanbar {
+  position: absolute; left: 0; right: 0; height: 56px; pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(255, 59, 80, 0.09), transparent);
+  animation: scan-down 3.4s linear infinite;
+}
+.scanbar.blue { background: linear-gradient(180deg, transparent, rgba(46, 144, 255, 0.11), transparent); }
+
+/* blinking terminal cursor */
+@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+.cursor-blink::after { content: "▌"; margin-left: 1px; animation: blink 1.05s step-end infinite; }
+
+/* marching dashes for an active data wire */
+@keyframes flow-dash { to { background-position: -200% 0; } }
+.flow-wire {
+  height: 2px;
+  background-image: linear-gradient(90deg, currentColor 0 8px, transparent 8px 18px);
+  background-size: 200% 2px; background-repeat: repeat-x;
+  animation: flow-dash 0.9s linear infinite;
+}
+
+/* a value slamming onto screen (status codes, big numbers) */
+@keyframes slam-in {
+  0% { transform: scale(1.7); opacity: 0; filter: blur(7px); }
+  55% { transform: scale(0.94); filter: blur(0); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.slam-in { animation: slam-in 0.42s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+
+/* slow drift on a faint grid so even the "empty" backdrop breathes */
+@keyframes grid-pan { to { background-position: 64px 64px, 64px 64px; } }
+.grid-pan { animation: grid-pan 6s linear infinite; }
+
+/* respect reduced-motion: kill the perpetual loops, keep one-shot reveals */
+@media (prefers-reduced-motion: reduce) {
+  .radar-sweep, .ping-ring, .packet-fly, .scanbar, .flow-wire, .grid-pan, .cursor-blink::after { animation: none !important; }
+}

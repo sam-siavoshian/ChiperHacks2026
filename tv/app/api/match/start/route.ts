@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   const payload = {
     red: { lab: String(red.lab), model: String(red.model) },
     blue: { lab: String(blue.lab), model: String(blue.model) },
-    rounds: Number(cfg?.rounds) || 3,
+    rounds: Number(cfg?.rounds) || 25,
   };
 
   // Start the FULL match via the runner service (it boots the arena, spawns the

@@ -33,9 +33,11 @@ class Config:
 
     # --- match shape --------------------------------------------------------
     total_rounds: int = int(_e("ARENA_TOTAL_ROUNDS", "6"))     # red+blue pairs
-    turn_seconds: float = float(_e("ARENA_TURN_SECONDS", "80"))
-    turn_grace_seconds: float = float(_e("ARENA_TURN_GRACE", "30"))  # kill margin past the clock
-    warmup_seconds: float = float(_e("ARENA_WARMUP_SECONDS", "20"))  # the generating-screen window
+    # Fast-paced sport: short turns keep the broadcast punchy. RED gets a scout report
+    # (handed targets) so it strikes in one shot — 45s is plenty and rarely cuts off.
+    turn_seconds: float = float(_e("ARENA_TURN_SECONDS", "45"))
+    turn_grace_seconds: float = float(_e("ARENA_TURN_GRACE", "25"))  # kill margin past the clock
+    warmup_seconds: float = float(_e("ARENA_WARMUP_SECONDS", "10"))  # the generating-screen window
     match_seconds: float = float(_e("ARENA_MATCH_SECONDS", "900"))
 
     # --- agents -------------------------------------------------------------

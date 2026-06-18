@@ -13,7 +13,7 @@ export const WARMUP_MS = 15000; // launch -> live window: lets the arena boot + 
 export const DEFAULT_CONFIG: MatchConfig = {
   red: { lab: "anthropic", model: "claude-opus-4-8" },
   blue: { lab: "anthropic", model: "claude-sonnet-4-6" },
-  rounds: 3,
+  rounds: 25,
 };
 
 const KEY = "arena.matchConfig";
@@ -25,7 +25,7 @@ export function loadConfig(): MatchConfig {
     if (!raw) return DEFAULT_CONFIG;
     const j = JSON.parse(raw);
     if (j?.red?.lab && j?.red?.model && j?.blue?.lab && j?.blue?.model) {
-      return { red: j.red, blue: j.blue, rounds: j.rounds || 3 };
+      return { red: j.red, blue: j.blue, rounds: j.rounds || 25 };
     }
   } catch { /* ignore corrupt storage */ }
   return DEFAULT_CONFIG;

@@ -16,6 +16,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
+OnLine = Callable[[bytes], Awaitable[None]]
+
 # Low reasoning effort = the model acts instead of deliberating. Overridable.
 EFFORT = os.environ.get("ARENA_EFFORT", "low")
 
@@ -38,7 +40,8 @@ class AgentSession:
         json.dump({"mcpServers": {f"arena-{side}": mcp_server}}, open(self.mcp_config, "w"))
         self.log_path = f"/tmp/arena-session-{side}.log"
 
-    async def take_turn(self, prompt: str, deadline_seconds: float) -> dict[str, Any]:
+    async def take_turn(self, prompt: str, deadline_seconds: float,
+                        on_line: Optional[OnLine] = None) -> dict[str, Any]:
         if self.mock is not None:
             r = await self.mock(prompt)
             return {"status": "mock", "result": r}
@@ -57,13 +60,35 @@ class AgentSession:
         cmd += (["--resume", self.session_id] if self.started else ["--session-id", self.session_id])
         self.started = True
 
+        # Pipe stdout so the session tap can read the agent's mind LIVE (and still
+        # tee every line to the logfile for debugging). stderr folds into the same
+        # stream. If no tap is wired, this behaves like the old logfile dump.
         log = open(self.log_path, "a")
         try:
-            proc = await asyncio.create_subprocess_exec(*cmd, cwd=self.cwd, stdout=log, stderr=asyncio.subprocess.STDOUT)
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, cwd=self.cwd,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
         except FileNotFoundError:
+            log.close()
             return {"status": "no_claude_cli"}
+
+        async def pump() -> None:
+            assert proc.stdout is not None
+            async for raw in proc.stdout:
+                try:
+                    log.write(raw.decode("utf-8", "replace"))
+                    log.flush()
+                except Exception:
+                    pass
+                if on_line is not None:
+                    try:
+                        await on_line(raw)
+                    except Exception:
+                        pass  # the tap must never break the turn
+            await proc.wait()
+
         try:
-            await asyncio.wait_for(proc.wait(), timeout=deadline_seconds)
+            await asyncio.wait_for(pump(), timeout=deadline_seconds)
             return {"status": "done", "code": proc.returncode}
         except asyncio.TimeoutError:
             try:
@@ -72,3 +97,5 @@ class AgentSession:
             except Exception:
                 pass
             return {"status": "timeout"}
+        finally:
+            log.close()

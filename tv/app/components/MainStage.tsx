@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import CasterChyron from "./CasterChyron";
 import AttackerView from "./AttackerView";
@@ -15,28 +15,54 @@ const AttackGraph = dynamic(() => import("./AttackGraph"), {
 });
 
 type Tab = "attacker" | "defender" | "network";
+type Mode = "auto" | Tab;
 
 export default function MainStage({ state, now }: { state: ArenaState; now: number }) {
-  const [tab, setTab] = useState<Tab>("attacker");
+  // The TV auto-directs: it cuts to whoever moved most recently, like a live
+  // sports feed. The operator can pin a view by clicking a tab; "AUTO" resumes
+  // hands-off direction.
+  const [mode, setMode] = useState<Mode>("auto");
+
+  const autoTab: Tab = useMemo(() => {
+    const a = state.attacker?.at ?? -1;
+    const d = state.defender?.at ?? -1;
+    if (a < 0 && d < 0) return "attacker";
+    return d > a ? "defender" : "attacker";
+  }, [state.attacker?.at, state.defender?.at]);
+
+  const tab: Tab = mode === "auto" ? autoTab : mode;
+  const isAuto = mode === "auto";
+  const fresh = (at?: number) => at != null && now - at < 2600;
+  const liveSide: "red" | "blue" | null = tab === "attacker" && fresh(state.attacker?.at) ? "red" : tab === "defender" && fresh(state.defender?.at) ? "blue" : null;
 
   return (
     <div className="relative card overflow-hidden min-h-0 grid-veil">
-      {/* tab switcher */}
-      <div className="absolute z-30 top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 rounded-full glass">
-        <TabBtn on={tab === "attacker"} onClick={() => setTab("attacker")} label="Attacker" dot="#ff3b50" />
-        <TabBtn on={tab === "defender"} onClick={() => setTab("defender")} label="Defender" dot="#2e90ff" />
-        <TabBtn on={tab === "network"} onClick={() => setTab("network")} label="Network" dot="#b8ff3b" />
-        <HelpTip align="end" side="bottom" className="mr-1"
-          text="Attacker: the endpoint Red is hitting and its request/response. Defender: the threat Blue caught and the patch it deployed. Network: the map of discovered assets." />
+      {/* NOW ON bug — which corner the broadcast is cut to right now */}
+      <div className="absolute z-30 top-3 left-3 flex items-center gap-2 px-2.5 py-1.5 rounded-full glass">
+        <span className="text-[9px] font-bold tracking-[0.14em] text-faint">{isAuto ? "AUTO" : "PINNED"}</span>
+        <span className="w-px h-3 bg-white/15" />
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: tab === "attacker" ? "#ff3b50" : tab === "defender" ? "#2e90ff" : "#b8ff3b", animation: liveSide ? "blink 1.05s step-end infinite" : "none" }} />
+        <span className="text-[11px] font-bold" style={{ color: tab === "attacker" ? "#ff3b50" : tab === "defender" ? "#2e90ff" : "#b8ff3b" }}>
+          {tab === "attacker" ? "NOW ON · RED" : tab === "defender" ? "NOW ON · BLUE" : "NETWORK MAP"}
+        </span>
       </div>
 
-      {tab === "attacker" && <AttackerView attacker={state.attacker} />}
-      {tab === "defender" && <DefenderView defender={state.defender} rulesCount={state.rules.length} />}
+      {/* tab switcher */}
+      <div className="absolute z-30 top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 rounded-full glass">
+        <AutoBtn on={isAuto} onClick={() => setMode("auto")} />
+        <span className="w-px h-4 bg-white/12 mx-0.5" />
+        <TabBtn on={!isAuto && tab === "attacker"} live={tab === "attacker"} onClick={() => setMode("attacker")} label="Attacker" dot="#ff3b50" />
+        <TabBtn on={!isAuto && tab === "defender"} live={tab === "defender"} onClick={() => setMode("defender")} label="Defender" dot="#2e90ff" />
+        <TabBtn on={!isAuto && tab === "network"} live={tab === "network"} onClick={() => setMode("network")} label="Network" dot="#b8ff3b" />
+        <HelpTip align="end" side="bottom" className="mr-1"
+          text="AUTO cuts to whoever just moved — Red attacking or Blue defending. Click a tab to pin a view; AUTO resumes hands-off." />
+      </div>
+
+      {tab === "attacker" && <AttackerView attacker={state.attacker} budget={state.redBudget} now={now} />}
+      {tab === "defender" && <DefenderView defender={state.defender} rulesCount={state.rules.length} budget={state.blueBudget} now={now} />}
       {tab === "network" && (
         <>
           <AttackGraph nodes={state.nodes} links={state.links} />
-          <CornerTag className="top-3 left-3" label="Target Network" sub="Live topology" tone="blue" dot
-            help="A live map of the target. Red dots are compromised; a blue ring means Blue patched it." />
           <CornerTag className="top-3 right-3 text-right items-end" label={state.vulnClass ? state.vulnClass : "Standby"} sub="Active vector" tone="red" align="right"
             help="The type of attack Red is running right now." />
         </>
@@ -48,11 +74,21 @@ export default function MainStage({ state, now }: { state: ArenaState; now: numb
   );
 }
 
-function TabBtn({ on, onClick, label, dot }: { on: boolean; onClick: () => void; label: string; dot: string }) {
+function AutoBtn({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-all ${on ? "bg-win/15 text-win" : "text-mute hover:text-[#c3cde0]"}`}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: on ? "#b8ff3b" : "#5a6684", animation: on ? "blink 1.05s step-end infinite" : "none" }} />
+      AUTO
+    </button>
+  );
+}
+
+function TabBtn({ on, live, onClick, label, dot }: { on: boolean; live: boolean; onClick: () => void; label: string; dot: string }) {
   return (
     <button onClick={onClick}
       className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all ${on ? "bg-white/10 text-text" : "text-mute hover:text-[#c3cde0]"}`}>
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: on ? dot : "#5a6684" }} />
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: on || live ? dot : "#5a6684" }} />
       {label}
     </button>
   );

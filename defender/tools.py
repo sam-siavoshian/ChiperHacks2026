@@ -39,6 +39,13 @@ def _charge(cost: int = 1) -> Optional[dict[str, Any]]:
     return None if runtime.rounds.spend(cost) else _budget_error()
 
 
+def _budget_now() -> dict[str, int]:
+    """Per-turn tool-call budget snapshot, stamped into every `attempting`
+    detail so the broadcast can render a live 'tools left this turn' HUD."""
+    r = runtime.rounds
+    return {"budget": r.budget, "used": r.used, "remaining": r.remaining()}
+
+
 async def _emit(type_: str, payload: dict[str, Any], target: Optional[str] = None) -> None:
     await runtime.bus.emit(envelope("blue", type_, payload, target=target, round_=runtime.rounds.round))
 
@@ -204,6 +211,30 @@ def _summarize_result(tool: str, r: Any) -> Optional[str]:
     return None
 
 
+def _result_detail(tool: str, r: Any) -> dict[str, Any]:
+    """The substance of BLUE's move — the patch verdict, the area intel — so the
+    caster can explain the defense, not just say 'patch rejected'."""
+    if not isinstance(r, dict):
+        return {}
+    d: dict[str, Any] = {}
+    try:
+        if tool == "submit_patch":
+            d["vuln"] = r.get("vuln_id")
+            d["valid"] = bool(r.get("valid"))
+            if r.get("exploit_still_works"):
+                d["exploitStillWorks"] = True
+            if r.get("feature_broken"):
+                d["featureBroken"] = True
+            reason = r.get("reasoning")
+            if reason:
+                d["bodySnippet"] = str(reason)[:240]
+        elif tool == "get_intel":
+            d["bodySnippet"] = f"RED targeting '{r.get('area')}' — {len(r.get('candidates', []))} candidate vuln(s)"
+    except Exception:
+        pass
+    return {k: v for k, v in d.items() if v not in (None, "")}
+
+
 def auto_report(fn):
     """Wrap a tool so every call narrates intent + outcome to the broadcast,
     stamps the match clock into the result, and refuses once the turn is over."""
@@ -231,8 +262,11 @@ def auto_report(fn):
             params = dict(bound.arguments)
         except Exception:
             params = dict(kwargs)
-        await _emit("attempting", {"agent": "blue", "tool": tool,
-                                   "target": config.APP_DIR, "note": _describe_call(tool, params)})
+        intent_detail = {"vuln": params.get("vuln_id")} if params.get("vuln_id") else {}
+        intent_detail.update(_budget_now())  # pre-call budget (this call not charged yet)
+        await _emit("attempting", {"agent": "blue", "tool": tool, "target": config.APP_DIR,
+                                   "note": _describe_call(tool, params), "phase": "intent",
+                                   "detail": intent_detail})
         t0 = time.perf_counter()
         result = await fn(*args, **kwargs)
         tool_ms = (time.perf_counter() - t0) * 1000.0
@@ -240,8 +274,11 @@ def auto_report(fn):
             result["match"] = runtime.rounds.status(tool_ms)
         outcome = _summarize_result(tool, result)
         if outcome:
-            await _emit("attempting", {"agent": "blue", "tool": tool,
-                                       "target": config.APP_DIR, "note": outcome})
+            detail = _result_detail(tool, result)
+            detail.setdefault("ms", round(tool_ms, 1))
+            detail.update(_budget_now())  # post-call budget — what the HUD counts down
+            await _emit("attempting", {"agent": "blue", "tool": tool, "target": config.APP_DIR,
+                                       "note": outcome, "phase": "result", "detail": detail})
         return result
 
     wrapper.__signature__ = resolved

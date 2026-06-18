@@ -1,0 +1,227 @@
+{
+  "generatedFrom": "judge/probes.ts",
+  "app": "Tasklight",
+  "note": "Confirmed real vulnerabilities. Class + endpoint + injection point only — no payloads. Decoys are excluded.",
+  "targets": [
+    {
+      "id": "sqli-login",
+      "title": "SQL injection auth bypass on login",
+      "area": "login",
+      "owasp": "A03:2021 Injection",
+      "difficulty": "easy",
+      "class": "sqli",
+      "method": "POST",
+      "endpoint": "/api/auth/login",
+      "input": "email field (body) is concatenated into SQL"
+    },
+    {
+      "id": "jwt-weak-secret",
+      "title": "Forgeable session tokens (weak/default JWT secret)",
+      "area": "authentication",
+      "owasp": "A02:2021 Cryptographic Failures",
+      "difficulty": "medium",
+      "class": "weak-jwt",
+      "method": "*",
+      "endpoint": "/api/* (any authed route)",
+      "input": "session JWT is signed with a weak/default secret — steal it, forge a token"
+    },
+    {
+      "id": "predictable-reset-token",
+      "title": "Predictable password reset token enables account takeover",
+      "area": "password reset",
+      "owasp": "A07:2021 Identification & Authentication Failures",
+      "difficulty": "medium",
+      "class": "predictable-token",
+      "method": "POST",
+      "endpoint": "/api/auth/reset",
+      "input": "token field (body) is guessable, not random"
+    },
+    {
+      "id": "user-enumeration",
+      "title": "Username enumeration via reset response",
+      "area": "login",
+      "owasp": "A07:2021 Identification & Authentication Failures",
+      "difficulty": "easy",
+      "class": "user-enumeration",
+      "method": "POST",
+      "endpoint": "/api/auth/forgot",
+      "input": "email field — response differs for known vs unknown users"
+    },
+    {
+      "id": "mass-assignment-role",
+      "title": "Privilege escalation via mass assignment on profile update",
+      "area": "user profile",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "medium",
+      "class": "mass-assignment",
+      "method": "PATCH",
+      "endpoint": "/api/users/me",
+      "input": "inject an extra 'role' field in the body to self-escalate"
+    },
+    {
+      "id": "idor-task",
+      "title": "IDOR: read any task across workspaces",
+      "area": "IDOR",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "easy",
+      "class": "idor",
+      "method": "GET",
+      "endpoint": "/api/tasks/:id",
+      "input": "id path param — read a task from another workspace"
+    },
+    {
+      "id": "idor-file",
+      "title": "IDOR: read file metadata across workspaces",
+      "area": "file access",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "medium",
+      "class": "idor",
+      "method": "GET",
+      "endpoint": "/api/files/:id",
+      "input": "id path param — read another workspace's file metadata"
+    },
+    {
+      "id": "missing-admin-authz",
+      "title": "Missing function-level authorization on admin user list",
+      "area": "admin panel",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "medium",
+      "class": "broken-access-control",
+      "method": "GET",
+      "endpoint": "/api/admin/users",
+      "input": "call it as a non-admin (no admin check)"
+    },
+    {
+      "id": "broken-role-check",
+      "title": "Privilege escalation: assign a role above your own",
+      "area": "IDOR",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "hard",
+      "class": "broken-access-control",
+      "method": "POST",
+      "endpoint": "/api/workspaces/:wsId/members/:userId/role",
+      "input": "role body — assign a role above your own"
+    },
+    {
+      "id": "stored-xss",
+      "title": "Stored XSS in task export view",
+      "area": "XSS",
+      "owasp": "A03:2021 Injection",
+      "difficulty": "easy",
+      "class": "stored-xss",
+      "method": "GET",
+      "endpoint": "/api/tasks/:id/export.html",
+      "input": "a comment body (POST /api/tasks/:id/comments) is rendered raw in the export"
+    },
+    {
+      "id": "sqli-search",
+      "title": "SQL injection (UNION) in task search",
+      "area": "search",
+      "owasp": "A03:2021 Injection",
+      "difficulty": "medium",
+      "class": "sqli",
+      "method": "GET",
+      "endpoint": "/api/search",
+      "input": "q query param — UNION injection"
+    },
+    {
+      "id": "sqli-reports",
+      "title": "SQL injection (UNION) in task report filter",
+      "area": "reports",
+      "owasp": "A03:2021 Injection",
+      "difficulty": "hard",
+      "class": "sqli",
+      "method": "GET",
+      "endpoint": "/api/reports/tasks",
+      "input": "status query param — UNION injection leaks other tables"
+    },
+    {
+      "id": "ssrf-integration",
+      "title": "SSRF via webhook integration test",
+      "area": "integrations",
+      "owasp": "A10:2021 Server-Side Request Forgery",
+      "difficulty": "medium",
+      "class": "ssrf",
+      "method": "POST",
+      "endpoint": "/api/integrations/:wsId/test",
+      "input": "url body — point it at an internal host"
+    },
+    {
+      "id": "ssrf-avatar",
+      "title": "SSRF via avatar import-from-URL",
+      "area": "user profile",
+      "owasp": "A10:2021 Server-Side Request Forgery",
+      "difficulty": "medium",
+      "class": "ssrf",
+      "method": "POST",
+      "endpoint": "/api/users/me/avatar",
+      "input": "url body — server fetches any URL"
+    },
+    {
+      "id": "path-traversal",
+      "title": "Path traversal in legacy file download",
+      "area": "file access",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "medium",
+      "class": "path-traversal",
+      "method": "GET",
+      "endpoint": "/api/files/download",
+      "input": "path query param — ../ escapes the upload dir"
+    },
+    {
+      "id": "unrestricted-upload",
+      "title": "Unrestricted upload served inline (stored XSS / HTML injection)",
+      "area": "file upload",
+      "owasp": "A05:2021 Security Misconfiguration",
+      "difficulty": "hard",
+      "class": "unrestricted-upload",
+      "method": "POST",
+      "endpoint": "/api/files then GET /api/files/:id/raw",
+      "input": "upload HTML/script — it is served inline"
+    },
+    {
+      "id": "price-tampering",
+      "title": "Plan upgrade trusts client-supplied price",
+      "area": "billing",
+      "owasp": "A04:2021 Insecure Design",
+      "difficulty": "medium",
+      "class": "price-tampering",
+      "method": "POST",
+      "endpoint": "/api/billing/:wsId/upgrade",
+      "input": "priceCents / seats body are trusted from the client"
+    },
+    {
+      "id": "coupon-race",
+      "title": "Coupon reuse via race condition",
+      "area": "billing",
+      "owasp": "A04:2021 Insecure Design",
+      "difficulty": "hard",
+      "class": "race-condition",
+      "method": "POST",
+      "endpoint": "/api/billing/:wsId/redeem",
+      "input": "code body — fire concurrently (race_probe) to redeem past the limit"
+    },
+    {
+      "id": "secrets-exposure",
+      "title": "Diagnostics endpoint leaks JWT signing secret",
+      "area": "secrets",
+      "owasp": "A05:2021 Security Misconfiguration",
+      "difficulty": "easy",
+      "class": "secrets-exposure",
+      "method": "GET",
+      "endpoint": "/api/config",
+      "input": "hidden diagnostics route returns the jwtSecret"
+    },
+    {
+      "id": "open-redirect",
+      "title": "Open redirect on SSO callback",
+      "area": "login",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "easy",
+      "class": "open-redirect",
+      "method": "GET",
+      "endpoint": "/api/auth/sso/callback",
+      "input": "next query param accepts an absolute external URL"
+    }
+  ]
+}
