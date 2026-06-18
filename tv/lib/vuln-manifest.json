@@ -1,0 +1,270 @@
+{
+  "generatedFrom": "judge/probes.ts",
+  "app": "Tasklight",
+  "nodes": [
+    {
+      "id": "sqli-login",
+      "title": "SQL injection auth bypass on login",
+      "area": "login",
+      "owasp": "A03:2021 Injection",
+      "difficulty": "easy",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "jwt-weak-secret",
+      "title": "Forgeable session tokens (weak/default JWT secret)",
+      "area": "authentication",
+      "owasp": "A02:2021 Cryptographic Failures",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.25,
+      "y": 0
+    },
+    {
+      "id": "predictable-reset-token",
+      "title": "Predictable password reset token enables account takeover",
+      "area": "password reset",
+      "owasp": "A07:2021 Identification & Authentication Failures",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.5,
+      "y": 0
+    },
+    {
+      "id": "user-enumeration",
+      "title": "Username enumeration via reset response",
+      "area": "login",
+      "owasp": "A07:2021 Identification & Authentication Failures",
+      "difficulty": "easy",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.75,
+      "y": 0
+    },
+    {
+      "id": "mass-assignment-role",
+      "title": "Privilege escalation via mass assignment on profile update",
+      "area": "user profile",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 1,
+      "y": 0
+    },
+    {
+      "id": "idor-task",
+      "title": "IDOR: read any task across workspaces",
+      "area": "IDOR",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "easy",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0,
+      "y": 0.25
+    },
+    {
+      "id": "idor-file",
+      "title": "IDOR: read file metadata across workspaces",
+      "area": "file access",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.25,
+      "y": 0.25
+    },
+    {
+      "id": "missing-admin-authz",
+      "title": "Missing function-level authorization on admin user list",
+      "area": "admin panel",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.5,
+      "y": 0.25
+    },
+    {
+      "id": "broken-role-check",
+      "title": "Privilege escalation: assign a role above your own",
+      "area": "IDOR",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "hard",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.75,
+      "y": 0.25
+    },
+    {
+      "id": "stored-xss",
+      "title": "Stored XSS in task export view",
+      "area": "XSS",
+      "owasp": "A03:2021 Injection",
+      "difficulty": "easy",
+      "isDecoy": false,
+      "status": "open",
+      "x": 1,
+      "y": 0.25
+    },
+    {
+      "id": "sqli-search",
+      "title": "SQL injection (UNION) in task search",
+      "area": "search",
+      "owasp": "A03:2021 Injection",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0,
+      "y": 0.5
+    },
+    {
+      "id": "sqli-reports",
+      "title": "SQL injection (UNION) in task report filter",
+      "area": "reports",
+      "owasp": "A03:2021 Injection",
+      "difficulty": "hard",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.25,
+      "y": 0.5
+    },
+    {
+      "id": "ssrf-integration",
+      "title": "SSRF via webhook integration test",
+      "area": "integrations",
+      "owasp": "A10:2021 Server-Side Request Forgery",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.5,
+      "y": 0.5
+    },
+    {
+      "id": "ssrf-avatar",
+      "title": "SSRF via avatar import-from-URL",
+      "area": "user profile",
+      "owasp": "A10:2021 Server-Side Request Forgery",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.75,
+      "y": 0.5
+    },
+    {
+      "id": "path-traversal",
+      "title": "Path traversal in legacy file download",
+      "area": "file access",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 1,
+      "y": 0.5
+    },
+    {
+      "id": "unrestricted-upload",
+      "title": "Unrestricted upload served inline (stored XSS / HTML injection)",
+      "area": "file upload",
+      "owasp": "A05:2021 Security Misconfiguration",
+      "difficulty": "hard",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0,
+      "y": 0.75
+    },
+    {
+      "id": "price-tampering",
+      "title": "Plan upgrade trusts client-supplied price",
+      "area": "billing",
+      "owasp": "A04:2021 Insecure Design",
+      "difficulty": "medium",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.25,
+      "y": 0.75
+    },
+    {
+      "id": "coupon-race",
+      "title": "Coupon reuse via race condition",
+      "area": "billing",
+      "owasp": "A04:2021 Insecure Design",
+      "difficulty": "hard",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.5,
+      "y": 0.75
+    },
+    {
+      "id": "secrets-exposure",
+      "title": "Diagnostics endpoint leaks JWT signing secret",
+      "area": "secrets",
+      "owasp": "A05:2021 Security Misconfiguration",
+      "difficulty": "easy",
+      "isDecoy": false,
+      "status": "open",
+      "x": 0.75,
+      "y": 0.75
+    },
+    {
+      "id": "open-redirect",
+      "title": "Open redirect on SSO callback",
+      "area": "login",
+      "owasp": "A01:2021 Broken Access Control",
+      "difficulty": "easy",
+      "isDecoy": false,
+      "status": "open",
+      "x": 1,
+      "y": 0.75
+    },
+    {
+      "id": "decoy-cmd-ping",
+      "title": "Decoy: host ping looks like command injection",
+      "area": "diagnostics",
+      "owasp": "(decoy)",
+      "difficulty": "medium",
+      "isDecoy": true,
+      "status": "open",
+      "x": 0,
+      "y": 1
+    },
+    {
+      "id": "decoy-directory-sqli",
+      "title": "Decoy: directory lookup looks injectable",
+      "area": "search",
+      "owasp": "(decoy)",
+      "difficulty": "medium",
+      "isDecoy": true,
+      "status": "open",
+      "x": 0.25,
+      "y": 1
+    },
+    {
+      "id": "decoy-token-verify",
+      "title": "Decoy: token verify looks bypassable",
+      "area": "authentication",
+      "owasp": "(decoy)",
+      "difficulty": "medium",
+      "isDecoy": true,
+      "status": "open",
+      "x": 0.5,
+      "y": 1
+    },
+    {
+      "id": "decoy-template-eval",
+      "title": "Decoy: template preview looks like SSTI",
+      "area": "templating",
+      "owasp": "(decoy)",
+      "difficulty": "medium",
+      "isDecoy": true,
+      "status": "open",
+      "x": 0.75,
+      "y": 1
+    }
+  ]
+}
