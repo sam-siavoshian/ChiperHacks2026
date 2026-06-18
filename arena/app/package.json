@@ -1,0 +1,11 @@
+{
+  "name": "tasklight",
+  "version": "1.4.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run server/index.ts",
+    "dev": "bun --watch server/index.ts",
+    "seed": "DB_PATH=$PWD/seed/seed.db bun run seed/seed.ts"
+  }
+}

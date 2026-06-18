@@ -1,0 +1,36 @@
+# python
+.venv/
+.coverage
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# node / bun
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+bun.lockb
+
+# env / secrets
+.env
+.env.local
+*.local
+
+# arena runtime
+trajectories/*.jsonl
+!scripts/replay/*.jsonl
+captures/
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+uploads/
+.claude/scheduled_tasks.lock
+
+# os
+.DS_Store
+.gstack/
+.last-line-of-defence/

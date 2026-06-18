@@ -1,0 +1,9 @@
+node_modules/
+*.db
+*.db-wal
+*.db-shm
+.pristine/
+arena-run-*.db
+web/dist/
+uploads/*
+!uploads/seed-*

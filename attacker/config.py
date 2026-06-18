@@ -1,0 +1,88 @@
+"""Runtime configuration + scope guard for the Arena attacker MCP.
+
+Everything is env-overridable so the orchestrator can point the attacker at a
+different target/bus per match without code changes. The scope guard is the
+security floor: the attacker agent can only ever touch the one target host.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from urllib.parse import urlsplit
+
+# Matches a leading URI scheme ("http://", "gopher://", ...). Used to tell an
+# absolute URL from a relative path. Checking for "://" anywhere is wrong: a
+# relative path can legitimately carry a URL in its query (?next=https://...).
+_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://")
+
+
+def _env(name: str, default: str) -> str:
+    return os.environ.get(name, default)
+
+
+# --- target + bus ----------------------------------------------------------
+TARGET_BASE = _env("ARENA_TARGET", "http://127.0.0.1:4000").rstrip("/")
+ARENA_BUS = _env("ARENA_BUS", "http://127.0.0.1:8790").rstrip("/")  # the narrator relay (-> TV)
+BUS_EMIT_PATH = _env("ARENA_BUS_EMIT_PATH", "/emit")
+# Authoritative LLM judge (arena control plane). A submitted exploit claim is
+# resolved, proved, and scored here; the verdict is returned to the model and
+# the result is fanned to the TV + narrator by the judge.
+JUDGE_URL = _env("ARENA_JUDGE_URL", "http://127.0.0.1:4100/claim")
+
+# --- match clock + budget --------------------------------------------------
+# It is a sport: a hard match clock, fixed turns, and a per-turn tool budget.
+# The orchestrator overrides these per match via the control surface.
+ROUND_BUDGET = int(_env("ARENA_ROUND_BUDGET", "6"))
+MATCH_SECONDS = float(_env("ARENA_MATCH_SECONDS", "180"))   # whole match
+TURN_SECONDS = float(_env("ARENA_TURN_SECONDS", "45"))      # one attacker turn
+TOTAL_ROUNDS = int(_env("ARENA_TOTAL_ROUNDS", "6"))         # attacker turns in the match
+HTTP_TIMEOUT = float(_env("ARENA_HTTP_TIMEOUT", "8.0"))
+BODY_TRUNC = int(_env("ARENA_BODY_TRUNC", "4000"))
+FUZZ_CONCURRENCY = int(_env("ARENA_FUZZ_CONCURRENCY", "8"))
+
+# --- OOB collaborator + control surface ------------------------------------
+OOB_HOST = _env("ARENA_OOB_HOST", "127.0.0.1")
+CONTROL_HOST = _env("ARENA_ATTACKER_CONTROL_HOST", "127.0.0.1")
+CONTROL_PORT = int(_env("ARENA_ATTACKER_CONTROL_PORT", "8791"))
+
+# Default red lane used when a tool does not imply a more specific one.
+AGENT_DEFAULT = "web_exploit"
+
+
+# --- scope guard (security floor) ------------------------------------------
+class ScopeError(ValueError):
+    """Raised when a request would leave the allowed target host."""
+
+
+_parsed = urlsplit(TARGET_BASE)
+ALLOWED_SCHEME = _parsed.scheme or "http"
+ALLOWED_NETLOC = _parsed.netloc  # host:port
+
+
+def host_allowed(netloc: str) -> bool:
+    return netloc == ALLOWED_NETLOC
+
+
+def resolve_target(path_or_url: str) -> str:
+    """Turn a model-supplied path or URL into an absolute in-scope URL.
+
+    Accepts a bare path ("/api/search") which is joined onto the target base,
+    or a full URL which MUST match the allowed host and an http(s) scheme.
+    Anything off-scope (other host, file://, gopher://, ...) raises ScopeError.
+    """
+    value = (path_or_url or "").strip()
+    if not value:
+        raise ScopeError("empty target")
+
+    if _SCHEME_RE.match(value):
+        u = urlsplit(value)
+        if u.scheme not in ("http", "https"):
+            raise ScopeError(f"scheme not allowed: {u.scheme!r}")
+        if not host_allowed(u.netloc):
+            raise ScopeError(f"host out of scope: {u.netloc!r} (allowed: {ALLOWED_NETLOC!r})")
+        return value
+
+    if not value.startswith("/"):
+        value = "/" + value
+    return f"{TARGET_BASE}{value}"

@@ -1,0 +1,33 @@
+{
+  "_comment": "Defender sandbox — deliberately tighter than the attacker's. It patches source with Read/Write/Edit only. NO Bash (no shell, so no cat/python/sed escape and no spawning subprocesses) and NO Task/Agent (cannot spawn agents). It may NOT read the judge's answer sheet/probes (arena/judge) or the pristine baseline. cwd is the repo so it can edit arena/app and arena/contract is the public board; it has no reason to leave. Read/Edit denies are real for those tools. For an airtight match, still run inside a container or a dedicated OS user.",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "mcp__arena-defender__*",
+      "Read",
+      "Write",
+      "Edit"
+    ],
+    "deny": [
+      "Bash",
+      "Task",
+      "Agent",
+      "Read(arena/judge/**)",
+      "Read(arena/.pristine/**)",
+      "Read(/Users/**/arena/judge/**)",
+      "Read(/Users/**/arena/.pristine/**)",
+      "Edit(arena/judge/**)",
+      "Read(/etc/**)",
+      "Read(/root/**)",
+      "WebFetch",
+      "WebSearch",
+      "ScheduleWakeup",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "RemoteTrigger"
+    ]
+  },
+  "enableAllProjectMcpServers": false,
+  "includeCoAuthoredBy": false
+}

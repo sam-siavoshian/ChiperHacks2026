@@ -1,0 +1,30 @@
+{
+  "_comment": "Bash deny-rules are deliberately NOT used here: Bash commands are freeform, so any denylist is trivially bypassed (python -c open(...), node, sed, head, a symlink, cp-then-read). Pretending otherwise gives false confidence. The Read/Edit/web denies below DO work for those tools; the REAL containment for Bash is an OS-level jail. See README: run inside a container or a dedicated OS user for a real match. Bash is allowed here only so the agent can write+run its own attack scripts inside its /tmp workspace.",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "mcp__arena-attacker__*"
+    ],
+    "deny": [
+      "Bash",
+      "Read(/Users/**)",
+      "Read(/home/**)",
+      "Read(/etc/**)",
+      "Read(/root/**)",
+      "Read(//**)",
+      "Edit(/Users/**)",
+      "Edit(/home/**)",
+      "WebFetch",
+      "WebSearch",
+      "ScheduleWakeup",
+      "Task",
+      "Agent",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "RemoteTrigger"
+    ]
+  },
+  "enableAllProjectMcpServers": false,
+  "includeCoAuthoredBy": false
+}

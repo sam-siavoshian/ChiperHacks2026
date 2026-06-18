@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "arena-attacker": {
+      "command": "./.venv/bin/python",
+      "args": ["-m", "attacker.server"],
+      "env": {
+        "ARENA_TARGET": "http://127.0.0.1:4000",
+        "ARENA_BUS": "http://127.0.0.1:8790",
+        "ARENA_BUS_EMIT_PATH": "/emit",
+        "ARENA_JUDGE_URL": "http://127.0.0.1:4100/claim",
+        "ARENA_ROUND_BUDGET": "6"
+      }
+    },
+    "arena-defender": {
+      "command": "./.venv/bin/python",
+      "args": ["-m", "defender.server"],
+      "env": {
+        "ARENA_CONTROL_PLANE": "http://127.0.0.1:4100",
+        "ARENA_BUS": "http://127.0.0.1:8790",
+        "ARENA_BUS_EMIT_PATH": "/emit",
+        "ARENA_ROUND_BUDGET": "6"
+      }
+    }
+  }
+}
